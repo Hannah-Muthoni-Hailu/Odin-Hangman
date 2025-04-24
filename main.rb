@@ -1,45 +1,71 @@
 # frozen_string_literal: true
 
 require_relative 'lib/hangman'
+require 'json'
 
-# Load vocabulary
-words = File.readlines('words.txt')
+# Check if a saved game exists
+if File.exist?('save.json')
+  puts 'Press "A" to load the saved game or "N" to start a new game'
+  answer = gets.chomp.upcase
 
-# Select a random word between 5 and 12 characters
-word = ''
-word = words[rand(words.length)] until word.length >= 5 && word.length <= 12
+  load_game = answer == 'A'
+else
+  load_game = false
+end
 
-wrong_guess = 0 # Store the number of wrong guesses made by user
+if load_game
+  game = JSON.parse(File.read('save.json'))
+  word = game['word']
+  wrong_guess = game['wrong_guess']
+  word_reveal = game['word_reveal']
+else
+  # Load vocabulary
+  words = File.readlines('words.txt')
 
-word_reveal = ['_'] * (word.length - 1)
+  # Select a random word between 5 and 12 characters
+  word = ''
+  word = words[rand(words.length)] until word.length >= 5 && word.length <= 12
+
+  wrong_guess = 0 # Store the number of wrong guesses made by user
+
+  word_reveal = ['_'] * (word.length - 1)
+end
+
 hangman = Hangman.new
 
 puts word
 
-def start_game(wrong_guess, word_reveal, hangman, word)
-  loop do
-    hangman.display(wrong_guess, word.length) # Display the hangman
-    puts word_reveal.join(' ') # Display the blanks
+max_guesses = 12
+loop do
+  hangman.display(wrong_guess, max_guesses) # Display the hangman
+  break if wrong_guess == max_guesses # Break out of loop if player has used all guesses
 
-    guess = gets.chomp.downcase # Obtain case insensitive user guess
+  puts word_reveal.join(' ') # Display the blanks
+  puts 'Enter a letter to make a guess or press "1" to save the current game'
 
-    if word.include?(guess)
-      word_reveal = update_word_reveal(word, guess, word_reveal)
-      break unless word_reveal.include?('_')
-    else
-      wrong_guess += 1
+  guess = gets.chomp.downcase # Obtain case insensitive user guess
+
+  # Save the game state
+  if guess == '1'
+    current_game = {
+      word: word,
+      wrong_guess: wrong_guess,
+      word_reveal: word_reveal
+    }
+
+    File.write('save.json', JSON.generate(current_game))
+    break
+  end
+
+  if word.include?(guess)
+    word_reveal = hangman.update_word_reveal(word, guess, word_reveal)
+    # Check win
+    unless word_reveal.include?('_')
+      puts 'You win!!!!'
+      File.delete('save.json') if File.exist?('save.json') # Remove the saved game
+      break
     end
+  else
+    wrong_guess += 1
   end
 end
-
-def update_word_reveal(word, guess, word_reveal)
-  # Ensure that each instance of the guessed letter is accounted for
-  inds = (0...word.length).find_all { |i| word[i, 1] == guess }
-  inds.each do |ind|
-    word_reveal[ind] = guess
-  end
-
-  word_reveal
-end
-
-start_game(wrong_guess, word_reveal, hangman, word)
